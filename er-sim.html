@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resus Bay — 3D Emergency Medicine Simulator</title>
+<style>
+:root{--bg:#0b121a;--panel:rgba(11,18,26,.94);--line:#2b3d50;--txt:#e8f0f7;--dim:#8fa4b8;--ok:#4be38a;--warn:#ffc94b;--bad:#ff5a5f;--acc:#3ed0c0;--info:#7fb7ff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b121a;--panel:rgba(11,18,26,.94);--txt:#e8f0f7}}
+:root[data-theme="dark"]{--bg:#0b121a;--panel:rgba(11,18,26,.94);--txt:#e8f0f7}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;overflow:hidden;user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;outline:none;display:block}
+.hidden{display:none!important}
+#cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);font-size:26px;color:#fff;opacity:.75;pointer-events:none;text-shadow:0 0 3px #000}
+#prompt{position:fixed;left:50%;top:56%;transform:translateX(-50%);background:rgba(0,0,0,.65);border:2px solid var(--acc);padding:6px 12px;font-size:14px;pointer-events:none;white-space:nowrap}
+#tl{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:270px;background:var(--panel);border:2px solid var(--line);padding:8px;font-size:12px}
+#tl h4{margin:0 0 6px;font-size:12px;color:var(--dim);font-weight:600}
+.pl{border-left:4px solid #44515f;padding:3px 6px;margin-bottom:5px;background:rgba(255,255,255,.04)}
+.pl span{color:var(--dim)}.pl.empty{color:#56697c;border-color:#26323e}
+.pl.ok{border-color:var(--ok)}.pl.warn{border-color:var(--warn)}.pl.bad{border-color:var(--bad);animation:pulse 1s infinite}.pl.dead{border-color:#888;color:#888}
+@keyframes pulse{50%{background:rgba(255,90,95,.18)}}
+#tr{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);background:var(--panel);border:2px solid var(--line);padding:8px 12px;font-size:13px;text-align:right}
+#tr b{font-size:18px;color:var(--acc)}#lives{font-size:18px;color:var(--bad);letter-spacing:3px}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 18px);transform:translateX(-50%);max-width:560px;padding:10px 16px;border:2px solid var(--line);background:var(--panel);font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;text-align:center;z-index:30}
+#toast.show{opacity:1}#toast.good{border-color:var(--ok)}#toast.bad{border-color:var(--bad)}#toast.info{border-color:var(--info)}
+#chat{position:fixed;left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 86px);width:380px;font-size:12px;pointer-events:none}
+#chat div{background:rgba(0,0,0,.55);padding:3px 7px;margin-top:2px;border-left:3px solid var(--info)}
+#chat .good{border-color:var(--ok)}#chat .bad{border-color:var(--bad)}#chat .warn{border-color:var(--warn)}
+#hotbar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);display:flex;gap:4px;padding:4px;background:rgba(0,0,0,.6);border:2px solid var(--line)}
+.slot{width:54px;height:54px;border:2px solid #3a4a5a;background:rgba(255,255,255,.05);position:relative;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer}
+.slot.sel{border-color:#fff;background:rgba(62,208,192,.25)}
+.slot i{position:absolute;left:3px;top:1px;font-size:10px;color:var(--dim);font-style:normal}
+.slot b{position:absolute;right:3px;bottom:0;font-size:12px}
+#selname{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 80px);transform:translateX(-50%);font-size:12px;color:#fff;text-shadow:0 0 3px #000;pointer-events:none}
+#hint{position:fixed;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);font-size:11px;color:var(--dim);text-align:right;line-height:1.5;pointer-events:none}
+.overlay{position:fixed;inset:0;background:rgba(6,10,15,.88);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.box{max-width:640px;width:100%;background:#0f1924;border:3px solid var(--acc);padding:26px;max-height:92vh;overflow:auto}
+.box h1{margin:0 0 6px;font-size:28px;letter-spacing:.5px}.box p,.box li{font-size:14px;line-height:1.55;color:#c9d6e2}
+.box ul{padding-left:18px;margin:8px 0}
+.btn{background:var(--acc);color:#04201c;border:0;padding:12px 22px;font:700 15px inherit;font-family:inherit;cursor:pointer;margin-top:12px}
+.btn:hover{filter:brightness(1.1)}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(980px,96vw);max-height:92vh;background:var(--panel);border:3px solid var(--acc);z-index:40;display:flex;flex-direction:column}
+.mhead{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:2px solid var(--line)}
+.mhead b{font-size:16px}.mhead div div{font-size:12px;color:var(--dim)}
+.mhead button{background:#223243;color:var(--txt);border:2px solid var(--line);padding:6px 10px;font-family:inherit;cursor:pointer}
+.mbody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;padding:12px;overflow:auto}
+@media(max-width:760px){.mbody{grid-template-columns:1fr}}
+.card{border:2px solid var(--line);padding:8px 10px;font-size:13px;line-height:1.5;background:rgba(255,255,255,.03);margin-bottom:10px}
+.vit{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.vit div{border:2px solid var(--line);padding:5px;text-align:center;background:#05090d}
+.vit small{display:block;font-size:10px;color:var(--dim)}.vit b{font-size:20px}
+.vit .hr b{color:#35f07b}.vit .sp b{color:#45d4ff}.vit .bp b{color:#ff8b8b}.vit .rr b{color:#ffe066}
+.log{border:2px solid var(--line);height:210px;overflow:auto;padding:6px;font-size:12px;background:#05090d}
+.log div{margin-bottom:4px;padding-left:6px;border-left:3px solid var(--info)}.log .good{border-color:var(--ok)}.log .bad{border-color:var(--bad)}
+.grp{font-size:11px;color:var(--dim);margin:8px 0 4px;border-bottom:1px solid var(--line)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.act{background:#16283a;color:var(--txt);border:2px solid #2d4258;padding:6px 8px;text-align:left;font:12px inherit;font-family:inherit;cursor:pointer}
+.act:hover{border-color:var(--acc)}.act em{display:block;font-style:normal;font-size:10px;color:var(--ok)}
+.act.lack{opacity:.55}.act.lack em{color:var(--warn)}
+.sitem{display:flex;align-items:center;gap:10px;border:2px solid var(--line);padding:8px;margin-bottom:6px;background:rgba(255,255,255,.03)}
+.sitem .ic{font-size:26px}.sitem div{flex:1;font-size:13px}.sitem small{color:var(--dim)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@6.49.0/babylon.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross">+</div>
+<div id="prompt" class="hidden"></div>
+<div id="tl"><h4>EMERGENCY DEPARTMENT BOARD</h4><div id="plist"></div></div>
+<div id="tr"><div>Score <b id="score">0</b></div><div>Saved <b id="saved">0</b> · Best <b id="best">0</b></div><div id="lives">♥♥♥</div></div>
+<div id="toast"></div>
+<div id="chat"></div>
+<div id="selname"></div>
+<div id="hotbar"></div>
+<div id="hint">WASD move · Shift sprint · Space jump<br>E examine / open · Click use item in hand<br>1–9 select · Q drop item · M mute</div>
+
+<div id="panel" class="modal hidden">
+  <div class="mhead"><div><b id="pTitle"></b><div id="pSub"></div></div><button id="pClose">Close (E)</button></div>
+  <div class="mbody">
+    <div><div class="card" id="pHand"></div><div class="vit" id="pVit"></div><div class="log" id="pLog"></div></div>
+    <div id="pActs"></div>
+  </div>
+</div>
+<div id="station" class="modal hidden" style="width:min(560px,96vw)">
+  <div class="mhead"><div><b id="sTitle"></b><div>Take items into your hotbar (9 slots). Time keeps running.</div></div><button id="sClose">Close (E)</button></div>
+  <div class="mbody" style="grid-template-columns:1fr"><div id="sItems"></div></div>
+</div>
+
+<div id="pause" class="overlay hidden"><div class="box"><h1>Paused</h1><p>Click to return to the department.</p><button class="btn" id="resume">Resume</button></div></div>
+<div id="start" class="overlay"><div class="box">
+  <h1>Resus Bay</h1>
+  <p>You are the emergency physician on a night shift. Ambulances keep arriving. Walk the department, fetch equipment, examine patients and treat them before they die. Three deaths ends your shift.</p>
+  <ul>
+    <li><b>Move:</b> W A S D, Shift to sprint, Space to jump, mouse to look.</li>
+    <li><b>Examine:</b> look at a bed and press <b>E</b>. Check A-B-C-D-E, attach the monitor, then treat.</li>
+    <li><b>Equipment:</b> drugs and kit live in the <b>Supply Room</b> (east, south side) and the <b>Crash Cart</b> in the corridor. Your hotbar holds 9 stacks, so choose what to carry.</li>
+    <li><b>Use an item:</b> select it (1–9), aim at the patient and click. Anything you can't do by click is in the examine panel.</li>
+    <li>Compressions and bag-mask only continue while you stay next to the bed.</li>
+  </ul>
+  <p style="color:#8fa4b8;font-size:12px">Educational game with simplified physiology. Not a clinical training tool. Needs a desktop browser with keyboard and mouse.</p>
+  <button class="btn" id="go">Start shift</button>
+</div></div>
+<div id="over" class="overlay hidden"><div class="box"><h1>Shift over</h1><p id="overTxt"></p><button class="btn" id="again">Start a new shift</button></div></div>
+
+<script>
+(function(){
+'use strict';
+const B=window.BABYLON;
+if(!B){document.querySelector('#start .box').innerHTML='<h1>Could not load Babylon.js</h1><p>Check your connection and reload.</p>';return;}
+const $=id=>document.getElementById(id);
+const rnd=(a,b)=>a+Math.random()*(b-a),ri=(a,b)=>Math.floor(rnd(a,b+1)),pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
+const sm=(x,a,b)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+const gs=(x,m,s)=>Math.exp(-((x-m)*(x-m))/(2*s*s));
+const C3=h=>B.Color3.FromHexString(h);
+const fmt=s=>{s=Math.max(0,s|0);return String((s/60)|0).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+const dz=(p,k)=>p.d[k]||0;
+
+/* ================= ENGINE / SCENE ================= */
+const canvas=$('c');
+const engine=new B.Engine(canvas,true,{stencil:false});
+const scene=new B.Scene(engine);
+scene.clearColor=new B.Color4(.04,.06,.11,1);
+scene.collisionsEnabled=true;
+scene.skipPointerMovePicking=true;
+scene.fogMode=B.Scene.FOGMODE_LINEAR;scene.fogStart=50;scene.fogEnd=130;scene.fogColor=new B.Color3(.04,.06,.11);
+const hemi=new B.HemisphericLight('h',new B.Vector3(0,1,0),scene);hemi.intensity=.9;hemi.groundColor=new B.Color3(.42,.44,.5);
+const sun=new B.DirectionalLight('d',new B.Vector3(-.45,-1,.35),scene);sun.intensity=.5;
+const cam=new B.UniversalCamera('cam',new B.Vector3(0,1.66,-9),scene);
+cam.inputs.clear();cam.minZ=.05;cam.fov=1.1;scene.activeCamera=cam;
+
+/* ---------- pixel textures (Minecraft-style) ---------- */
+const sh=(r,g,b,v=.06)=>{const k=1+(Math.random()-.5)*v*2;return 'rgb('+Math.min(255,r*k|0)+','+Math.min(255,g*k|0)+','+Math.min(255,b*k|0)+')'};
+function pix(name,fn,size=16){
+  const t=new B.DynamicTexture(name,{width:size,height:size},scene,false,B.Texture.NEAREST_SAMPLINGMODE);
+  const ctx=t.getContext();
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){ctx.fillStyle=fn(x,y);ctx.fillRect(x,y,1,1);}
+  t.update();t.wrapU=t.wrapV=B.Texture.WRAP_ADDRESSMODE;return t;
+}
+function mat(name,tex,o={}){
+  const m=new B.StandardMaterial(name,scene);
+  if(tex)m.diffuseTexture=tex;
+  if(o.color)m.diffuseColor=C3(o.color);
+  m.specularColor=B.Color3.Black();
+  if(o.emissive){m.emissiveColor=C3(o.emissive);m.disableLighting=true;}
+  return m;
+}
+const cmc={};const cm=(hex)=>cmc[hex]||(cmc[hex]=mat('c'+hex,null,{color:hex}));
+const M={
+  floor:mat('floor',pix('floorT',(x,y)=>(x%8===7||y%8===7)?sh(150,162,168):sh(226,236,238,.05))),
+  wall:mat('wall',pix('wallT',(x,y)=>y<4?sh(150,190,182,.06):sh(200,226,216,.05))),
+  ceil:mat('ceil',pix('ceilT',(x,y)=>(x===0||y===0)?sh(150,150,150):sh(232,232,228,.03))),
+  road:mat('road',pix('roadT',()=>sh(52,54,60,.12))),
+  grass:mat('grass',pix('grassT',()=>sh(38,68,40,.2))),
+  conc:mat('conc',pix('concT',()=>sh(150,150,146,.08))),
+  light:mat('light',null,{emissive:'#ffffff'}),
+  wood:mat('wood',pix('woodT',(x,y)=>(y%5===4)?sh(90,60,30):sh(140,98,55,.08)))
+};
+function box(name,w,h,d,x,y,z,m,o={}){
+  const op={width:w,height:h,depth:d};
+  if(m.diffuseTexture){const t=o.tile||1;
+    op.faceUV=[new B.Vector4(0,0,w*t,h*t),new B.Vector4(0,0,w*t,h*t),new B.Vector4(0,0,d*t,h*t),new B.Vector4(0,0,d*t,h*t),new B.Vector4(0,0,w*t,d*t),new B.Vector4(0,0,w*t,d*t)];}
+  const b=B.MeshBuilder.CreateBox(name,op,scene);
+  b.position.set(x,y,z);b.material=m;
+  if(o.ry)b.rotation.y=o.ry;
+  b.checkCollisions=o.solid!==false;
+  b.isPickable=!!o.pick;
+  if(o.meta)b.metadata=o.meta;
+  if(o.hide)b.isVisible=false;
+  if(!o.dyn)b.freezeWorldMatrix();
+  return b;
+}
+function wall(x1,z1,x2,z2,t=.3,h=3.4){
+  const w=Math.abs(x2-x1)||t,d=Math.abs(z2-z1)||t;
+  return box('wall',w,h,d,(x1+x2)/2,h/2,(z1+z2)/2,M.wall,{pick:true});
+}
+function signMat(text,w,h,bg,fg,font){
+  const dt=new B.DynamicTexture('sg',{width:w,height:h},scene,false);
+  dt.drawText(text,null,h*.68,font||'bold 56px monospace',fg||'#fff',bg||'#14344f',true);
+  const m=new B.StandardMaterial('sgm',scene);m.emissiveTexture=dt;m.diffuseColor=B.Color3.Black();m.disableLighting=true;m.backFaceCulling=false;return m;
+}
+function sign(text,x,y,z,ry,pw,ph,bg,fg,billboard){
+  const p=B.MeshBuilder.CreatePlane('sign',{width:pw,height:ph},scene);
+  p.material=signMat(text,512,Math.round(512*ph/pw),bg,fg,'bold 54px monospace');
+  p.position.set(x,y,z);p.rotation.y=ry||0;p.isPickable=false;
+  if(billboard)p.billboardMode=B.Mesh.BILLBOARDMODE_ALL;
+  return p;
+}
+
+/* ================= WORLD ================= */
+box('ground',240,.2,240,0,-.2,0,M.grass,{tile:1});
+box('road',120,.1,20,0,-.05,-24,M.road,{solid:true});
+box('walk',20,.1,4,0,-.05,-14.9,M.conc);
+box('floor',44,.1,26,0,-.05,0,M.floor,{tile:2});
+box('ceil',44.6,.2,26.6,0,3.5,0,M.ceil,{tile:.5});
+// boundary
+[[0,3,-40,120,6,1],[0,3,32,120,6,1],[-60,3,-4,1,6,80],[60,3,-4,1,6,80]].forEach(a=>box('bound',a[3],a[4],a[5],a[0],a[1],a[2],M.wall,{hide:true}));
+// outer walls
+wall(-22.15,13,22.15,13);wall(-22,-13.15,-22,13.15);wall(22,-13.15,22,13.15);
+wall(-22.15,-13,-3,-13);wall(3,-13,22.15,-13);
+box('hdr',6,.8,.3,0,3,-13,M.wall);
+// interior
+wall(-22,-3,-14,-3);wall(-10,-3,-6,-3);wall(6,-3,10,-3);wall(13,-3,22,-3);
+box('hdr',4,.8,.3,-12,3,-3,M.wall);box('hdr',3,.8,.3,11.5,3,-3,M.wall);
+wall(-6,-13,-6,-10);wall(-6,-7,-6,-3);wall(6,-13,6,-10);wall(6,-7,6,-3);
+box('hdr',.3,.8,3,-6,3,-8.5,M.wall);box('hdr',.3,.8,3,6,3,-8.5,M.wall);
+[-11,0,11].forEach(x=>wall(x,5.5,x,13));
+// ceiling light panels
+const lights=[];
+[[-16.5,9],[-5.5,9],[5.5,9],[16.5,9],[-18,1.2],[-9,1.2],[0,1.2],[9,1.2],[18,1.2],[0,-8],[-14,-8],[-14,-11],[14,-8],[14,-11],[-8,-5],[8,-5]].forEach(a=>{box('lamp',3,.05,1.2,a[0],3.38,a[1],M.light,{solid:false})});
+// signs
+[-16.5,-5.5,5.5,16.5].forEach((cx,i)=>sign('RESUS BAY '+(i+1),cx,2.6,12.82,0,2.6,.65,'#7a1f24','#fff'));
+sign('SUPPLY ROOM',11.5,2.75,-2.78,Math.PI,2.8,.6,'#14506b','#fff');
+sign('WAITING',-12,2.75,-2.78,Math.PI,2.4,.6,'#3b4a57','#fff');
+sign('EMERGENCY ENTRANCE',0,2.85,-12.8,Math.PI,5,.6,'#b3282d','#fff');
+sign('AMBULANCE BAY',0,2.85,-13.3,0,5,.6,'#b3282d','#fff');
+// nurse station
+box('desk',8,1.1,.9,0,.55,1.5,cm('#c9d3da'),{pick:false});
+box('deskT',8.3,.08,1.1,0,1.14,1.5,cm('#2f3f4f'),{solid:false});
+[-2.5,0,2.5].forEach(x=>{box('pc',.5,.35,.05,x,1.4,1.75,cm('#111'),{solid:false});box('pcs',.1,.2,.1,x,1.25,1.75,cm('#444'),{solid:false});});
+sign('NURSES',0,2.4,1.1,Math.PI,2,.5,'#14344f','#fff',true);
+// triage desk
+box('tri',2.2,1,.8,-4.3,.5,-10.5,cm('#c9d3da'));
+sign('TRIAGE',-4.3,1.7,-10.5,0,1.6,.4,'#14344f','#fff',true);
+// waiting room chairs, plants
+for(let i=0;i<6;i++){const x=-19+i*2;box('ch',.55,.08,.55,x,.45,-11,cm('#2e5a88'));box('chb',.55,.5,.08,x,.75,-11.3,cm('#2e5a88'));box('chl',.5,.4,.5,x,.2,-11,cm('#555'),{solid:false});}
+box('tbl',2.4,.45,1,-14,.22,-8.5,M.wood);
+[[-20.8,-4.2],[-7,-12],[20.8,-4.2]].forEach(a=>{box('pot',.5,.5,.5,a[0],.25,a[1],cm('#6b4a2e'));box('plant',.6,.9,.6,a[0],.95,a[1],cm('#2f8f3f'),{solid:false});});
+// supply room shelves
+for(let s=0;s<4;s++)for(let z=-12;z<=-4.5;z+=2.5){box('sh',.6,.06,2.2,21.6,.5+s*.6,z,M.wood);}
+for(let i=0;i<70;i++){const z=-12+Math.random()*7.5,y=.56+Math.floor(Math.random()*4)*.6;box('bx',.35,.25,.35,21.6,y+.15,z,cm(pick(['#e5e5e5','#3ec1d3','#f2c94c','#eb5757','#6fcf97'])),{solid:false});}
+// ambulance + street
+const amb=box('ambB',2.5,2.2,5.6,6,1.4,-19,cm('#f2f4f6'),{dyn:false});
+box('ambS',2.52,.4,5.62,6,1.3,-19,cm('#d6252d'),{solid:false});
+box('ambC',2.3,1.2,1.6,6,1.8,-21.6,cm('#20303f'),{solid:false});
+[[-1.3,-17.5],[1.3,-17.5],[-1.3,-20.5],[1.3,-20.5]].forEach(a=>box('whl',.35,.9,.9,6+a[0],.45,a[1],cm('#111'),{solid:false}));
+const lampR=mat('lr',null,{emissive:'#ff2020'}),lampB=mat('lb',null,{emissive:'#2050ff'});
+box('lr',.9,.2,.3,5.4,2.6,-19,lampR,{solid:false});box('lb',.9,.2,.3,6.6,2.6,-19,lampB,{solid:false});
+for(let x=-50;x<50;x+=6)box('ln',2.5,.02,.25,x,.01,-24,cm('#e8e8e0'),{solid:false});
+[-14,-2,14,26].forEach(x=>{box('pole',.2,5,.2,x,2.5,-14.5,cm('#444'));box('pl',.8,.2,.4,x,5.1,-14.5,M.light,{solid:false});});
+sign('EMERGENCY',-12,2.2,-13.2,0,4,.8,'#b3282d','#fff');
+
+/* ---------- supply stations ---------- */
+const STATIONS={
+  pharm:{name:'Medication Cabinet',items:['epi_im','epi_iv','nal','asa','ntg','d50']},
+  equip:{name:'Equipment & Fluids Shelf',items:['iv','saline','needle','tourn','bvm']},
+  crash:{name:'Crash Cart',items:['defib','bvm','epi_iv','iv']}
+};
+function station(id,x,z,col,ry,label){
+  const meta={type:'station',id};
+  box('stn',2.6,1.1,.9,x,.55,z,cm(col),{pick:true,meta});
+  box('stnT',2.8,.08,1.0,x,1.14,z,cm('#dfe6ea'),{solid:false});
+  box('stnU',2.4,.9,.35,x,2.05,z+(ry?0:-.2),cm('#b8c4cc'),{solid:false});
+  for(let i=0;i<8;i++)box('it',.22,.25,.2,x-1+i*.29,1.3,z,cm(pick(['#eb5757','#3ec1d3','#f2c94c','#6fcf97','#fff'])),{solid:false});
+  sign(label,x,2.85,z,ry||0,2.4,.5,'#14506b','#fff',true);
+}
+station('pharm',10.5,-12.2,'#4a6c86',Math.PI,'MEDICATIONS');
+station('equip',15.5,-12.2,'#4a7a6a',Math.PI,'EQUIPMENT');
+// crash cart
+(function(){const meta={type:'station',id:'crash'};
+  box('cart',.8,1,.55,0,.5,4.1,cm('#c0282d'),{pick:true,meta});
+  box('cartT',.9,.1,.6,0,1.05,4.1,cm('#222'),{pick:true,meta});
+  box('defibB',.5,.22,.3,0,1.22,4.1,cm('#e9e9e9'),{pick:true,meta,solid:false});
+  [0,1,2].forEach(i=>box('dr',.7,.02,.02,0,.25+i*.28,3.81,cm('#ddd'),{solid:false}));
+  sign('CRASH CART',0,2.1,4.1,0,1.6,.4,'#b3282d','#fff',true);
+})();
+
+/* ================= BAYS ================= */
+const BAYS=[];
+[-16.5,-5.5,5.5,16.5].forEach((cx,i)=>{
+  const meta={type:'patient',bay:i};
+  box('bedF',.9,.6,2.2,cx,.3,10.5,cm('#9aa4ad'),{pick:true,meta});
+  box('bedM',.95,.22,2.2,cx,.71,10.5,cm('#3f7fbf'),{pick:true,meta});
+  box('pil',.5,.12,.35,cx,.88,11.3,cm('#f4f4f4'),{solid:false});
+  box('rail',.04,.25,1.4,cx-.5,.95,10.3,cm('#c8d0d6'),{solid:false});box('rail',.04,.25,1.4,cx+.5,.95,10.3,cm('#c8d0d6'),{solid:false});
+  box('ivp',.05,2,.05,cx-1,1,11.3,cm('#bbb'),{solid:false});box('ivb',.2,.3,.1,cx-1,1.9,11.3,cm('#dff'),{solid:false});
+  box('pole',.06,1.4,.06,cx+1.5,.7,11.2,cm('#555'));box('base',.5,.05,.5,cx+1.5,.03,11.2,cm('#333'),{solid:false});
+  box('mbody',.95,.6,.14,cx+1.5,1.7,11.2,cm('#1a1d22'),{solid:false});
+  const mdt=new B.DynamicTexture('mon'+i,{width:512,height:256},scene,false);
+  const mm=new B.StandardMaterial('monm'+i,scene);mm.emissiveTexture=mdt;mm.diffuseColor=B.Color3.Black();mm.specularColor=B.Color3.Black();mm.disableLighting=true;
+  const scr=B.MeshBuilder.CreatePlane('scr'+i,{width:.86,height:.43},scene);scr.position.set(cx+1.5,1.7,11.125);scr.material=mm;scr.isPickable=false;
+  const tdt=new B.DynamicTexture('tag'+i,{width:512,height:160},scene,false);
+  const tm=new B.StandardMaterial('tagm'+i,scene);tm.emissiveTexture=tdt;tm.diffuseColor=B.Color3.Black();tm.disableLighting=true;tm.backFaceCulling=false;
+  const tag=B.MeshBuilder.CreatePlane('tag'+i,{width:1.7,height:.53},scene);tag.position.set(cx,2.75,10.5);tag.material=tm;tag.billboardMode=B.Mesh.BILLBOARDMODE_ALL;tag.isPickable=false;tag.isVisible=false;
+  BAYS.push({i,cx,p:null,mdt,mctx:mdt.getContext(),tdt,tag,mdraw:0,tagT:0});
+});
+
+/* ================= HUMANS ================= */
+function makeHuman(o){
+  const n=new B.TransformNode('human',scene),P={};
+  const mk=(nm,w,h,d,x,y,z,col)=>{const m=B.MeshBuilder.CreateBox(nm,{width:w,height:h,depth:d},scene);m.parent=n;m.position.set(x,y,z);const t=new B.StandardMaterial(nm+'M',scene);t.diffuseColor=C3(col);t.specularColor=B.Color3.Black();m.material=t;m.isPickable=false;P[nm]=m;return m;};
+  const dy=o.sit?-.3:0;
+  if(o.sit){mk('thL',.24,.24,.5,-.13,.47,.2,o.pants);mk('thR',.24,.24,.5,.13,.47,.2,o.pants);mk('shL',.24,.5,.24,-.13,.24,.45,o.pants);mk('shR',.24,.5,.24,.13,.24,.45,o.pants);}
+  else{mk('legL',.24,.75,.25,-.13,.375,0,o.pants);mk('legR',.24,.75,.25,.13,.375,0,o.pants);}
+  mk('torso',.5,.7,.25,0,1.1+dy,0,o.shirt);
+  mk('armL',.2,.7,.22,-.36,1.1+dy,0,o.shirt);mk('armR',.2,.7,.22,.36,1.1+dy,0,o.shirt);
+  mk('handL',.19,.14,.21,-.36,.68+dy,0,o.skin);mk('handR',.19,.14,.21,.36,.68+dy,0,o.skin);
+  mk('head',.4,.4,.4,0,1.65+dy,0,o.skin);
+  mk('hair',.42,.14,.42,0,1.88+dy,-.01,o.hair);
+  mk('eyeL',.07,.05,.02,-.1,1.68+dy,.205,'#1b1b1b');mk('eyeR',.07,.05,.02,.1,1.68+dy,.205,'#1b1b1b');
+  mk('mouth',.14,.03,.02,0,1.55+dy,.205,'#8a4a4a');
+  return {node:n,P};
+}
+const SKINS=['#f1c7a0','#e0ac83','#c68b63','#8d5a3b','#f6d5b6'],HAIRS=['#2b1d12','#5a3a1e','#111','#b9b9b9','#8a5a2b'];
+const npcs=[];
+function npc(x,z,ry,shirt,pants,sit){const h=makeHuman({skin:pick(SKINS),hair:pick(HAIRS),shirt,pants,sit});h.node.position.set(x,sit?0:0,z);h.node.rotation.y=ry;npcs.push(h);return h;}
+npc(-2.5,0,0,'#2a9d8f','#2a9d8f');npc(2.6,0,0,'#e9f1f5','#3a4a5a');npc(-9,3,Math.PI,'#e9f1f5','#3a4a5a');
+npc(-19,-11,0,'#b5651d','#34495e',true);npc(-15,-11,0,'#7d3c98','#2c3e50',true);npc(-11,-11,0,'#c0392b','#1e2a35',true);
+npc(-4.3,-11.5,Math.PI,'#2a9d8f','#2a9d8f');
+
+/* ================= GAME DATA ================= */
+const ITEMS={
+  defib:{name:'Defibrillator',icon:'⚡',from:'the Crash Cart (corridor)',qty:1,reuse:true,acts:['defib']},
+  bvm:{name:'Bag-Valve-Mask',icon:'🫁',from:'the Crash Cart or Equipment shelf',qty:1,reuse:true,acts:['bvm']},
+  iv:{name:'IV cannula kit',icon:'🩸',from:'the Crash Cart or Equipment shelf',qty:3,acts:['iv']},
+  saline:{name:'Saline 1 L bag',icon:'💧',from:'the Equipment shelf (Supply Room)',qty:2,acts:['saline']},
+  needle:{name:'14G decompression needle',icon:'📌',from:'the Equipment shelf (Supply Room)',qty:2,acts:['needleL','needleR']},
+  tourn:{name:'Tourniquet',icon:'🎗️',from:'the Equipment shelf (Supply Room)',qty:2,acts:['tourniquet']},
+  epi_im:{name:'Epinephrine 0.5 mg IM',icon:'💉',from:'the Medication Cabinet (Supply Room)',qty:2,acts:['epi_im']},
+  epi_iv:{name:'Epinephrine 1 mg IV',icon:'🧪',from:'the Medication Cabinet or Crash Cart',qty:3,acts:['epi_iv']},
+  nal:{name:'Naloxone 0.4 mg',icon:'💊',from:'the Medication Cabinet (Supply Room)',qty:3,acts:['naloxone']},
+  asa:{name:'Aspirin 324 mg',icon:'⚪',from:'the Medication Cabinet (Supply Room)',qty:2,acts:['aspirin']},
+  ntg:{name:'Nitroglycerin SL',icon:'🔵',from:'the Medication Cabinet (Supply Room)',qty:2,acts:['nitro']},
+  d50:{name:'Dextrose 50% IV',icon:'🍯',from:'the Medication Cabinet (Supply Room)',qty:2,acts:['dextrose']}
+};
+const ACT={
+  monitor:{l:'Attach monitor & pads',g:'Assess'},
+  A:{l:'A · Airway',g:'Assess'},B:{l:'B · Breathing (listen)',g:'Assess'},C:{l:'C · Circulation (pulse, skin)',g:'Assess'},D:{l:'D · Disability (GCS, pupils)',g:'Assess'},E:{l:'E · Expose / look',g:'Assess'},
+  ecg12:{l:'12-lead ECG',g:'Assess'},glucose:{l:'Blood glucose',g:'Assess'},
+  airway:{l:'Open airway (jaw thrust)',g:'Airway & breathing'},
+  o2:{l:'Oxygen, non-rebreather',g:'Airway & breathing'},
+  bvm:{l:'Bag-valve-mask ventilation',g:'Airway & breathing',item:'bvm'},
+  needleL:{l:'Needle decompression, LEFT chest',g:'Airway & breathing',item:'needle'},
+  needleR:{l:'Needle decompression, RIGHT chest',g:'Airway & breathing',item:'needle'},
+  cpr:{l:'Chest compressions (toggle)',g:'Circulation'},
+  defib:{l:'Defibrillate (shock)',g:'Circulation',item:'defib'},
+  iv:{l:'IV access',g:'Circulation',item:'iv'},
+  saline:{l:'Saline 1 L bolus',g:'Circulation',item:'saline',needIV:true},
+  pressure:{l:'Direct pressure on wound',g:'Circulation'},
+  tourniquet:{l:'Apply tourniquet',g:'Circulation',item:'tourn'},
+  cath:{l:'Activate cath lab',g:'Circulation'},
+  epi_im:{l:'Epinephrine 0.5 mg IM',g:'Drugs',item:'epi_im'},
+  epi_iv:{l:'Epinephrine 1 mg IV',g:'Drugs',item:'epi_iv',needIV:true},
+  naloxone:{l:'Naloxone 0.4 mg',g:'Drugs',item:'nal'},
+  aspirin:{l:'Aspirin 324 mg (chewed)',g:'Drugs',item:'asa'},
+  nitro:{l:'Nitroglycerin SL',g:'Drugs',item:'ntg'},
+  dextrose:{l:'Dextrose 50% IV',g:'Drugs',item:'d50',needIV:true}
+};
+const GROUPS=['Assess','Airway & breathing','Circulation','Drugs'];
+const SEM_DMG={epi_im:3,epi_iv:3,naloxone:3,aspirin:3,nitro:3,dextrose:3,needleL:6,needleR:6,tourniquet:2,pressure:0,cath:0};
+const R=(t,m,x)=>({t,m,x});
+const hasPulse=p=>!(p.kind==='vf'&&!p.rosc);
+const L=(p,n,c)=>n+(c-n)*clamp((100-p.H)/Math.max(1,100-p.H0),0,1.35);
+const sideName=p=>p.side==='L'?'left':'right';
+const needleFn=side=>p=>{
+  if(p.decomp)return R('info','Already decompressed.');
+  if(p.side===side){p.decomp=true;return R('good','Needle in. Hiss of escaping air! Breathing eases and blood pressure starts to rise.');}
+  p.H-=8;return R('bad','Wrong side! No air released and you risk lung injury. Re-check the breath sounds.');
+};
+const CASES={
+  anaph:{chief:'Allergic reaction',H:60,age:[16,50],
+    hist:p=>`${p.age}${p.sex}. Ate at a restaurant 10 min ago. Lip swelling, hives, "throat feels tight". Known nut allergy. EMS: SpO2 84%, BP 76/40.`,
+    drain:p=>dz(p,'epi_im')<1?.5-(p.flags.o2?.12:0):-(.55+(p.flags.o2?.15:0)+(p.fluids?.15:0)),
+    vit:p=>[L(p,82,142),L(p,120,74),L(p,99,84),L(p,16,31),L(p,15,13)],
+    A:p=>dz(p,'epi_im')?'Voice hoarse but stridor is easing.':'Swollen lips and tongue. Audible stridor: the airway is threatened.',
+    B:p=>dz(p,'epi_im')?'Wheeze settling, air entry improving.':'Diffuse expiratory wheeze, accessory muscle use, fast breathing.',
+    C:p=>dz(p,'epi_im')?'Pulse slowing, BP recovering, skin warm and pink.':'Fast thready pulse, flushed skin, low BP (distributive shock).',
+    D:()=>'Alert but very anxious. Pupils equal and reactive.',
+    E:()=>'Widespread urticaria (hives) on chest and arms, facial swelling. No trauma.',
+    tip:'Anaphylaxis: IM epinephrine (thigh) FIRST, repeat every 5 min if needed. Then oxygen and fluids.',
+    act:{epi_im:p=>{const n=dz(p,'epi_im');if(n===1)return R('good','Epinephrine 0.5 mg IM to the thigh, the life-saving first-line drug. Watch for improvement.');if(n===2)return R('good','Repeat epinephrine dose given. Reassess every 5 minutes.');p.H-=8;return R('bad','Too much epinephrine: tachyarrhythmia risk. Be careful!');},
+      saline:()=>R('good','IV fluid bolus supports blood pressure in anaphylactic shock.'),o2:()=>R('good','High-flow oxygen applied.')}},
+  tension:{chief:'Chest trauma',H:55,age:[18,60],
+    init:p=>{p.side=pick(['L','R']);},
+    hist:p=>`${p.age}${p.sex}. Motorcycle crash, chest impact. Worsening shortness of breath. EMS: SpO2 80%, BP 84/50.`,
+    drain:p=>p.decomp?-(.3+(p.flags.o2?.2:0)+(p.fluids?.1:0)):.55-(p.flags.o2?.15:0),
+    vit:p=>[L(p,80,140),L(p,120,68),L(p,99,78),L(p,16,36),L(p,15,12)],
+    A:()=>'Airway patent, speaking in short words.',
+    B:p=>p.decomp?'Breath sounds now present on both sides. Air entry good.':`Absent breath sounds on the ${sideName(p)}, hyper-resonant to percussion. Fast, laboured breathing.`,
+    C:p=>p.decomp?'Pulse settling, neck veins flat, BP rising.':'Rapid weak pulse, distended neck veins (JVD), hypotensive.',
+    D:()=>'Anxious, GCS 14. Pupils equal and reactive.',
+    E:p=>`Bruising and crepitus over the ${sideName(p)} chest wall. Trachea pushed towards the opposite side.`,
+    tip:'Tension pneumothorax is a clinical diagnosis. Needle decompress the affected side immediately, then a chest drain.',
+    act:{needleL:needleFn('L'),needleR:needleFn('R')}},
+  opioid:{chief:'Found unresponsive',H:55,age:[18,45],
+    hist:p=>`${p.age}${p.sex}. Found in a bathroom, blue lips, syringe nearby. Barely breathing. EMS: SpO2 70%.`,
+    drain:p=>{let d=.45;if(p.flags.bvm&&p.flags.airway)d=.05;else if(p.flags.bvm)d=.25;else if(p.flags.o2)d=.38;const n=dz(p,'naloxone');if(n>=1)d-=.35;if(n>=2)d-=.55;return d;},
+    vit:p=>{const v=[L(p,75,46),L(p,120,90),L(p,99,66),L(p,16,4),L(p,15,5)];if(p.flags.bvm&&p.flags.airway)v[2]=Math.min(99,v[2]+18);else if(p.flags.o2)v[2]=Math.min(99,v[2]+8);return v;},
+    A:p=>p.flags.airway?'Airway open with jaw thrust; snoring resolved.':'Tongue falling back, snoring respirations. The airway needs opening.',
+    B:p=>`Shallow breathing, rate about ${Math.round(p.v.rr)}/min.`,
+    C:()=>'Pulse slow and weak but present.',
+    D:p=>dz(p,'naloxone')>=2?'Awake and talking, GCS 15.':dz(p,'naloxone')?'Rousable, GCS 10, pupils less pinpoint.':'GCS 5, unresponsive to voice, pinpoint pupils.',
+    E:()=>'Track marks on both forearms, blue lips.',
+    tip:'Opioid overdose: airway and ventilation first, then titrated naloxone. Fentanyl often needs repeat doses.',
+    act:{naloxone:p=>{const n=dz(p,'naloxone');if(n===1)return R('good','Naloxone 0.4 mg given. Breathing improving but still drowsy.');if(n===2)return R('good','Second dose: awake and breathing well. Fentanyl often needs repeat doses.');return R('info','Already reversed. Monitor for re-sedation.');}}},
+  hemo:{chief:'Leg injury, bleeding',H:55,age:[20,60],
+    init:p=>{p.bleed='free';p.blood=0;},
+    hist:p=>`${p.age}${p.sex}. Chainsaw laceration to the right thigh. EMS pressure dressing is soaked. Pale and dizzy. BP 84/50.`,
+    drain:p=>p.bleed==='tq'?-(.05+(p.fluids>=1?.3:0)+(p.fluids>=2?.25:0)):p.bleed==='pressure'?.3-(p.fluids?.05:0):.65,
+    vit:p=>[L(p,80,148),L(p,120,72),L(p,99,94),L(p,16,30),L(p,15,12)],
+    A:()=>'Airway patent, talking.',B:()=>'Breathing fast, clear on both sides.',
+    C:p=>p.bleed==='tq'?'Bleeding stopped. Fast weak pulse, cool and pale.':p.bleed==='pressure'?'Oozing through the dressing. Rapid weak pulse, pale, cool.':'Bright red pulsatile blood from the right thigh! Rapid thready pulse, pale, clammy: haemorrhagic shock.',
+    D:()=>'Drowsy but rousable, GCS 13.',E:()=>'Deep laceration of the right thigh. No other injuries found.',
+    tip:'Limb haemorrhage: direct pressure, then a tourniquet. Control the bleeding BEFORE pouring in fluid.',
+    act:{pressure:p=>{if(p.bleed==='tq')return R('info','Tourniquet is already holding.');p.bleed='pressure';return R('good','Firm direct pressure slows the bleed but will not hold for long. Escalate to a tourniquet.');},
+      tourniquet:p=>{p.bleed='tq';return R('good','Tourniquet high on the thigh, tightened until the bleeding stops. Note the time.');},
+      saline:p=>p.bleed==='free'?R('info','Fluids running, but the bleeding is uncontrolled. Stop the bleed first.'):R('good','Volume resuscitation helps now that the bleeding is controlled.')}},
+  stemi:{chief:'Chest pain',H:80,age:[45,75],
+    hist:p=>`${p.age}${p.sex}. Crushing central chest pain radiating to the left arm and jaw for 40 minutes. Sweaty, nauseated. Hypertension, smoker.`,
+    drain:p=>.2-(dz(p,'aspirin')?.25:0)-(dz(p,'nitro')?.15:0)-(p.flags.cath?.25:0),
+    vit:p=>[L(p,78,104),L(p,124,158),L(p,99,94),L(p,14,22),15],
+    ecg:()=>'12-lead: ST elevation in II, III, aVF with reciprocal changes in I and aVL. Inferior STEMI!',
+    A:()=>'Airway patent, speaking full sentences.',B:()=>'Clear breath sounds, slightly fast.',C:()=>'Fast regular pulse, cool and clammy, BP high-normal.',
+    D:()=>'Alert, in severe pain, GCS 15.',E:()=>'Sweaty, pale, clutching the chest.',
+    done:p=>p.H>=100&&p.flags.cath,
+    tick:p=>{if(p.H<=35){p.kind='vf';p.chief='Cardiac arrest';p.rosc=false;p.shocks=0;p.H=55;p.H0=70;p.flags.cpr=false;chat('⚠ Bay '+(p.bay+1)+' collapsed into ventricular fibrillation!','bad');toast('Bay '+(p.bay+1)+': patient has arrested!','bad');}},
+    tip:'STEMI: aspirin, ECG early, activate the cath lab, nitrates if BP allows. Untreated it can degenerate into VF.',
+    act:{aspirin:p=>dz(p,'aspirin')===1?R('good','Aspirin chewed: antiplatelet therapy for suspected ACS.'):R('info','Already given.'),
+      nitro:p=>R('good','Nitroglycerin under the tongue; the pain eases. (Check BP first!)'),
+      cath:p=>p.flags.ecg?(p.flags.cath?R('info','Already activated.',true):(p.flags.cath=true,R('good','Cath lab activated. The door-to-balloon clock is running.'))):R('info','Get a 12-lead ECG first to confirm a STEMI.',true)}},
+  hypo:{chief:'Confused, sweaty',H:65,age:[25,75],
+    init:p=>{p.glu=26;},
+    hist:p=>`${p.age}${p.sex}. Insulin-dependent diabetic, found confused and sweaty by family. Skipped lunch after an insulin dose.`,
+    drain:p=>dz(p,'dextrose')?-.9:.35,
+    vit:p=>[L(p,78,112),L(p,120,142),L(p,99,97),L(p,16,20),L(p,15,8)],
+    A:()=>'Airway patent, mumbling.',B:()=>'Breathing normally.',C:()=>'Fast pulse, cold sweaty skin.',
+    D:p=>dz(p,'dextrose')?'Awake, orientated, GCS 15.':'GCS 8, confused and tremulous. Check the glucose!',
+    E:()=>'Insulin pen in the pocket. Drenched in sweat.',
+    tip:'Always check glucose in altered mental status. Treat with IV dextrose (or IM glucagon without access).',
+    act:{dextrose:p=>{if(dz(p,'dextrose')>1)return R('info','Glucose already corrected.');p.glu=145;return R('good','Dextrose 50% IV: glucose climbing, the patient is waking up.');}}},
+  vf:{chief:'Cardiac arrest',H:70,age:[45,80],
+    init:p=>{p.rosc=false;p.shocks=0;},
+    hist:p=>`${p.age}${p.sex}. Collapsed in a shopping centre, bystander CPR started. EMS: VF on arrival, one shock delivered. Unresponsive.`,
+    drain:p=>!p.rosc?(p.flags.cpr?(p.flags.bvm&&p.flags.airway?.08:.12):.55):.18-((p.flags.o2||p.flags.bvm)?.5:0)-(p.fluids?.35:0),
+    vit:p=>p.rosc?[L(p,96,122),L(p,118,80),L(p,99,86),p.flags.bvm?12:L(p,16,8),L(p,15,4)]:[0,0,0,0,3],
+    A:()=>'Unresponsive, no gag. The airway must be opened.',
+    B:p=>p.rosc?'Spontaneous breathing has returned, shallow.':'No breathing, only occasional agonal gasps.',
+    C:p=>p.rosc?'Weak carotid pulse, low BP.':'No carotid pulse after 10 seconds. Pale and cyanotic.',
+    D:p=>p.rosc?'GCS 4, not yet following commands.':'GCS 3, pupils mid-sized and fixed.',
+    E:()=>'No obvious injury.',
+    tip:'VF arrest: high-quality compressions, early defibrillation, epinephrine, then post-ROSC care (oxygen, fluids, monitoring).',
+    act:{epi_iv:p=>{if(p.rosc){p.H-=15;return R('bad','Epinephrine after ROSC: dangerous hypertension and arrhythmia risk.');}return R('good','Epinephrine 1 mg IV. Continue compressions and shock VF.');},
+      saline:p=>p.rosc?R('good','Post-ROSC fluids support the blood pressure.'):R('info','Fluids running, but compressions and a shock come first.')}}
+};
+const WEIGHTS=[['vf',1.2],['anaph',1.4],['tension',1],['opioid',1.2],['hemo',1.2],['stemi',1.4],['hypo',1]];
+const FN=['James','Maria','Chen','Aisha','Liam','Sofia','Omar','Priya','Noah','Elena','Kwame','Yuki','Diego','Hannah','Amir','Grace'],LN=['Smith','Garcia','Nguyen','Patel','Kim','Okafor','Rossi','Novak','Silva','Cohen','Tanaka','Haddad'];
+
+/* ================= STATE ================= */
+let running=false,over=false,locked=false,panelOpen=null,panelP=null,gameT=0;
+let score=0,saved=0,deaths=0,pid=0,nextSpawn=6,seq=['hypo','anaph'],lastKind='',muted=false;
+let best=0;try{best=+localStorage.getItem('ersim_best')||0;}catch(e){}
+const inv=new Array(9).fill(null);let sel=0;
+const keys={};let yaw=0,pitch=0,vy=0,onGround=false;
+let AC=null;
+
+/* ================= HUD helpers ================= */
+let toastTO=0;
+function toast(m,t){const e=$('toast');e.textContent=m;e.className='show '+(t||'info');clearTimeout(toastTO);toastTO=setTimeout(()=>e.className='',3400);}
+function chat(m,t){const c=$('chat'),d=document.createElement('div');d.className=t||'info';d.textContent=m;c.appendChild(d);while(c.children.length>7)c.removeChild(c.firstChild);setTimeout(()=>d.remove(),15000);}
+function addScore(n){score+=n;$('score').textContent=score;}
+function renderHotbar(){
+  let h='';inv.forEach((s,i)=>{h+=`<div class="slot ${i===sel?'sel':''}" data-i="${i}"><i>${i+1}</i>${s?ITEMS[s.id].icon:''}${s&&!ITEMS[s.id].reuse?`<b>${s.qty}</b>`:''}</div>`;});
+  $('hotbar').innerHTML=h;
+  const s=inv[sel];$('selname').textContent=s?ITEMS[s.id].name:'';
+}
+$('hotbar').addEventListener('click',e=>{const s=e.target.closest('.slot');if(s){sel=+s.dataset.i;renderHotbar();}});
+const invCount=id=>{const s=inv.find(x=>x&&x.id===id);return s?s.qty:0;};
+function giveItem(id){
+  const it=ITEMS[id];let s=inv.find(x=>x&&x.id===id);
+  if(s){if(it.reuse){toast('You are already carrying the '+it.name+'.','info');return;}s.qty+=it.qty;}
+  else{const i=inv.findIndex(x=>!x);if(i<0){toast('Hotbar full. Drop something with Q first.','bad');return;}inv[i]={id,qty:it.qty};}
+  renderHotbar();toast('Picked up '+it.name,'good');
+}
+function useUp(id){const i=inv.findIndex(x=>x&&x.id===id);if(i<0)return;inv[i].qty--;if(inv[i].qty<=0)inv[i]=null;renderHotbar();}
+function dropSel(){if(inv[sel]){toast('Returned '+ITEMS[inv[sel].id].name+' to supply.','info');inv[sel]=null;renderHotbar();}}
+
+/* ================= AUDIO ================= */
+function beep(f,d,v,type){if(!AC||muted||v<=.001)return;const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.value=f;const t=AC.currentTime;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+.02);}
+function siren(){let n=0;const iv=setInterval(()=>{beep(n%2?720:960,.35,.05,'triangle');if(++n>7)clearInterval(iv);},380);}
+
+/* ================= PATIENTS ================= */
+function buildPatient(p,bay){
+  const skin=pick(SKINS),gown=pick(['#7fbfd6','#8fd0b5','#a7c4e0']);
+  const h=makeHuman({skin,hair:pick(HAIRS),shirt:gown,pants:'#5d7f9c'});
+  h.node.rotation=new B.Vector3(-Math.PI/2,Math.PI,0);h.node.position.set(bay.cx,.95,9.55);
+  Object.values(h.P).forEach(m=>{m.isPickable=true;m.metadata={type:'patient',bay:bay.i};});
+  p.model=h;p.skin=C3(skin);
+  if(p.kind==='hemo'){const w=B.MeshBuilder.CreateBox('wound',{width:.22,height:.3,depth:.03},scene);w.parent=h.node;w.position.set(.13,.5,.13);const wm=new B.StandardMaterial('wm',scene);wm.diffuseColor=C3('#a00f14');w.material=wm;w.isPickable=false;
+    const bl=B.MeshBuilder.CreateBox('blood',{width:1,height:.02,depth:1},scene);bl.position.set(bay.cx+.2,.02,9.8);const bm=new B.StandardMaterial('bm',scene);bm.diffuseColor=C3('#7d0a10');bl.material=bm;bl.isPickable=false;bl.scaling.set(.2,1,.2);p.bloodMesh=bl;}
+}
+function spawn(kind){
+  const bay=BAYS.find(b=>!b.p);if(!bay)return false;
+  const C=CASES[kind];
+  const p={id:++pid,bay:bay.i,kind,chief:C.chief,sex:Math.random()<.5?'M':'F',age:ri(C.age[0],C.age[1]),H:C.H,H0:C.H,d:{},flags:{},fluids:0,log:[],credit:{},t:0,v:{hr:80,sbp:120,dbp:75,spo2:98,rr:16,gcs:15},trace:new Float32Array(330),tp:0,acc:0,phase:0,tt:0,beatT:0,alarmT:0,br:0,glu:ri(92,150),dead:false,saved:false,exitT:0};
+  p.name=pick(FN)+' '+pick(LN);
+  if(C.init)C.init(p);
+  const v=C.vit(p);p.v={hr:v[0],sbp:v[1],dbp:v[1]*.62,spo2:v[2],rr:v[3],gcs:v[4]};
+  buildPatient(p,bay);bay.p=p;bay.tag.isVisible=true;
+  siren();
+  chat(`🚑 Bay ${bay.i+1}: ${p.age}${p.sex} ${p.chief.toLowerCase()}. Go examine!`,'warn');toast('Ambulance arrival: Bay '+(bay.i+1)+' — '+p.chief,'info');
+  return true;
+}
+function removePatient(p){const b=BAYS[p.bay];if(p.model)p.model.node.dispose(false,true);if(p.bloodMesh)p.bloodMesh.dispose(false,true);if(p.sheet)p.sheet.dispose(false,true);b.p=null;b.tag.isVisible=false;if(panelP===p)closePanel();}
+function rhythmOf(p){return p.dead?'asys':(p.kind==='vf'&&!p.rosc)?'vf':p.kind==='stemi'?'stemi':'sinus';}
+function die(p){
+  p.dead=true;p.exitT=8;deaths++;addScore(-150);$('lives').textContent='♥'.repeat(Math.max(0,3-deaths))+'♡'.repeat(Math.min(3,deaths));
+  const b=BAYS[p.bay];const s=B.MeshBuilder.CreateBox('sheet',{width:.85,height:.06,depth:1.85},scene);s.position.set(b.cx,1.16,10.5);const sm2=new B.StandardMaterial('shm',scene);sm2.diffuseColor=C3('#f2f2f2');s.material=sm2;s.isPickable=false;p.sheet=s;
+  chat(`✖ Bay ${b.i+1}: ${p.name} has died. −150`,'bad');chat('💡 '+CASES[p.kind].tip,'info');toast('Patient in Bay '+(b.i+1)+' died','bad');
+  if(deaths>=3)setTimeout(()=>endGame(),2500);
+}
+function stabilise(p){
+  p.saved=true;p.exitT=5;saved++;$('saved').textContent=saved;
+  const bonus=Math.max(0,Math.round(100-p.t*.4));addScore(100+bonus);
+  chat(`✔ Bay ${p.bay+1}: ${p.name} stabilised, moving to ICU. +${100+bonus}`,'good');chat('💡 '+CASES[p.kind].tip,'info');toast('Patient stabilised!','good');
+  if(best<score){best=score;try{localStorage.setItem('ersim_best',best);}catch(e){}$('best').textContent=best;}
+}
+function updatePatient(p,dt){
+  const C=CASES[p.kind],b=BAYS[p.bay];
+  if(p.dead||p.saved){p.exitT-=dt;if(p.exitT<=0)removePatient(p);return;}
+  p.t+=dt;
+  const dist=Math.hypot(player.position.x-b.cx,player.position.z-10.5);
+  if(p.flags.cpr&&dist>6.5){p.flags.cpr=false;chat(`Bay ${b.i+1}: compressions stopped, you walked away.`,'bad');}
+  if(p.flags.bvm&&dist>6.5){p.flags.bvm=false;chat(`Bay ${b.i+1}: bagging stopped, you walked away.`,'bad');}
+  p.H=Math.min(100,p.H-C.drain(p)*dt);
+  if(p.bleed&&p.bleed!=='tq'&&p.bloodMesh){p.blood+=dt*(p.bleed==='free'?1:.4);}
+  if(C.tick)C.tick(p,dt);
+  const C2=CASES[p.kind];
+  if(p.H<=0){die(p);return;}
+  if(C2.done?C2.done(p):p.H>=100){stabilise(p);return;}
+  const tv=C2.vit(p),k=Math.min(1,dt*1.4),v=p.v;
+  v.hr+=(tv[0]-v.hr)*k;v.sbp+=(tv[1]-v.sbp)*k;v.dbp=v.sbp*.62;v.spo2+=(tv[2]-v.spo2)*k;v.rr+=(tv[3]-v.rr)*k;v.gcs+=(tv[4]-v.gcs)*k;
+  // monitor audio
+  if(p.flags.monitor){
+    const vol=.05*clamp(1-dist/16,0,1),r=rhythmOf(p);
+    if(r==='vf'){p.alarmT-=dt;if(p.alarmT<=0){p.alarmT=.7;beep(1100,.16,vol*1.6,'square');}}
+    else{p.beatT+=dt*(v.hr/60);if(p.beatT>=1){p.beatT-=1;beep(v.spo2<90?640:880,.09,vol);}
+      if(v.spo2<85||v.hr>135){p.alarmT-=dt;if(p.alarmT<=0){p.alarmT=1.6;beep(1000,.12,vol*1.4,'square');}}}
+  }
+}
+/* ---------- ECG ---------- */
+function ecg(ph,type){
+  let y=.12*gs(ph,.15,.03)-.08*gs(ph,.27,.008)+gs(ph,.3,.011)-.15*gs(ph,.335,.012);
+  if(type==='stemi')y+=.38*sm(ph,.34,.4)*(1-sm(ph,.58,.7))+.28*gs(ph,.6,.06);else y+=.22*gs(ph,.6,.05);
+  return y;
+}
+const vfw=t=>(.5*Math.sin(t*38)+.4*Math.sin(t*23+1.3)+.3*Math.sin(t*9.1))*(.55+.45*Math.sin(t*2.7))+(Math.random()-.5)*.12;
+function feedTrace(p,dt){
+  p.acc+=dt*100;let n=Math.floor(p.acc);p.acc-=n;
+  while(n-->0){const r=rhythmOf(p);let y;
+    if(r==='vf'){p.tt+=.01;y=vfw(p.tt)+(p.flags.cpr?.6*Math.sin(p.tt*11.5):0);}
+    else if(r==='asys')y=(Math.random()-.5)*.02;
+    else{p.phase+=(p.v.hr/60)/100;if(p.phase>=1)p.phase-=1;y=ecg(p.phase,r)+(Math.random()-.5)*.015;}
+    p.trace[p.tp]=y;p.tp=(p.tp+1)%p.trace.length;}
+}
+function vitText(p){
+  const pulse=hasPulse(p)&&!p.dead,v=p.v;
+  return {hr:pulse?Math.round(v.hr):'--',bp:pulse?Math.round(v.sbp)+'/'+Math.round(v.dbp):'--/--',sp:pulse?Math.round(clamp(v.spo2,0,100))+'%':'--',rr:(pulse||p.flags.bvm)&&!p.dead?Math.round(v.rr):'--'};
+}
+function drawMonitor(b){
+  const c=b.mctx,p=b.p,W=512;
+  c.fillStyle='#010708';c.fillRect(0,0,512,256);c.textAlign='center';c.font='bold 30px monospace';
+  if(!p||!p.flags.monitor){c.fillStyle='#2a4a4a';c.fillText(p?'NO LEADS ATTACHED':'STANDBY',256,135);b.mdt.update();return;}
+  const N=p.trace.length,pw=330,base=130,amp=62;
+  c.strokeStyle='#22ff66';c.lineWidth=2.5;c.beginPath();let st=false;
+  for(let i=0;i<N;i++){const d=(i-p.tp+N)%N;if(d<10){st=false;continue;}const x=i*pw/N,y=base-p.trace[i]*amp;if(!st){c.moveTo(x,y);st=true;}else c.lineTo(x,y);}
+  c.stroke();
+  const t=vitText(p);c.textAlign='left';
+  c.fillStyle='#22ff66';c.font='bold 20px monospace';c.fillText('HR',350,24);c.font='bold 54px monospace';c.fillText(String(t.hr),350,76);
+  c.fillStyle='#45d4ff';c.font='bold 20px monospace';c.fillText('SpO2',350,104);c.font='bold 46px monospace';c.fillText(t.sp,350,148);
+  c.fillStyle='#ff8b8b';c.font='bold 18px monospace';c.fillText('NIBP',350,178);c.font='bold 30px monospace';c.fillText(t.bp,350,208);
+  c.fillStyle='#ffe066';c.font='bold 18px monospace';c.fillText('RR',350,234);c.font='bold 28px monospace';c.fillText(String(t.rr),400,236);
+  if(rhythmOf(p)==='vf'||p.dead){c.fillStyle='#ff3b3b';c.font='bold 22px monospace';c.fillText(p.dead?'ASYSTOLE':'V-FIB',12,250);}
+  b.mdt.update();
+}
+function drawTag(b){
+  const p=b.p;if(!p)return;const c=b.tdt.getContext();
+  const mon=p.flags.monitor&&!p.dead&&!p.saved,col=p.dead?'#555':p.saved?'#2d9d5a':mon?(p.H>=70?'#2d9d5a':p.H>=40?'#c99a1c':'#c2353b'):'#2c4157';
+  c.fillStyle=col;c.fillRect(0,0,512,160);c.fillStyle='rgba(0,0,0,.35)';c.fillRect(0,0,512,54);
+  c.fillStyle='#fff';c.textAlign='left';c.font='bold 34px monospace';c.fillText('BAY '+(b.i+1)+'  '+p.age+p.sex,14,40);
+  c.font='bold 30px monospace';c.fillText(p.dead?'DECEASED':p.saved?'STABLE':p.chief,14,100);
+  c.font='22px monospace';c.fillText(mon?(p.H>=70?'stable':p.H>=40?'unstable':'CRITICAL'):'unmonitored',14,140);
+  b.tdt.update();
+}
+
+/* ================= ACTIONS ================= */
+function perform(p,id){
+  const a=ACT[id],C=CASES[p.kind],h=C.act&&C.act[id];
+  if(a.item&&!invCount(a.item))return R('bad',`You don't have ${ITEMS[a.item].name}. Get it from ${ITEMS[a.item].from}.`,true);
+  if(a.needIV&&!p.flags.iv)return R('bad','You need IV access first (use an IV kit).',true);
+  let r=null;
+  if(id in SEM_DMG){
+    p.d[id]=dz(p,id)+1;
+    if(h)r=h(p);
+    else{if(SEM_DMG[id])p.H-=SEM_DMG[id];
+      r=id==='pressure'?R('info','There is no wound to compress.',true):id==='cath'?R('info','Nothing to activate: no STEMI identified.',true):R('bad',`${a.l}: no clear indication for this patient.`);}
+  }else{
+    switch(id){
+      case 'monitor':p.flags.monitor=true;r=R('info',rhythmOf(p)==='vf'?'Pads on. The monitor shows VENTRICULAR FIBRILLATION, a shockable rhythm!':'Monitor and pads connected. Vitals now show on the bedside monitor.');break;
+      case 'A':case 'B':case 'C':case 'D':case 'E':r=R('info',C[id](p));break;
+      case 'ecg12':r=R('info',C.ecg?C.ecg(p):(p.kind==='vf'&&!p.rosc)?'Coarse ventricular fibrillation.':'12-lead: sinus rhythm, no ST elevation.');if(p.kind==='stemi')p.flags.ecg=true;break;
+      case 'glucose':r=R('info',`Blood glucose: ${p.glu} mg/dL${p.glu<60?' — LOW!':''}.`);break;
+      case 'airway':p.flags.airway=true;r=R('info','Airway opened with jaw thrust.');break;
+      case 'o2':p.flags.o2=true;r=R('info','High-flow oxygen (15 L/min, non-rebreather) applied.');break;
+      case 'bvm':p.flags.bvm=true;r=p.flags.airway?R('good','Bag-valve-mask ventilating with good chest rise. Stay next to the bed.'):R('info','Bagging, but there is a leak. Open the airway first.');break;
+      case 'cpr':
+        if(p.flags.cpr){p.flags.cpr=false;r=R('info','Compressions paused.',true);}
+        else if(!hasPulse(p)){p.flags.cpr=true;r=R('good','Compressions started: hard and fast, 100–120/min. Stay next to the bed!');}
+        else{p.H-=10;r=R('bad','The patient HAS a pulse. Compressions on a beating heart cause harm.');}break;
+      case 'defib':
+        if(!p.flags.monitor)r=R('bad','Attach the monitor and pads first. The defibrillator needs the rhythm.',true);
+        else if(p.kind==='vf'&&!p.rosc){p.shocks++;const ch=.3+(p.flags.cpr?.25:0)+Math.min(.2,dz(p,'epi_iv')*.1)+p.shocks*.08;
+          if(Math.random()<ch||p.shocks>=4){p.rosc=true;p.flags.cpr=false;p.H=Math.max(p.H,60);r=R('good','⚡ CLEAR! Shock delivered. ROSC! A pulse returns. Now oxygen and IV fluids.');}
+          else r=R('info','⚡ Shock delivered, still VF. Resume compressions and consider epinephrine.');}
+        else{p.H-=15;r=R('bad','Shock not indicated: the rhythm is not shockable. This harms the patient.');}break;
+      case 'iv':if(p.flags.iv)r=R('info','Already has IV access.',true);else{p.flags.iv=true;r=R('info','IV cannula in. Access secured.');}break;
+      case 'saline':p.fluids++;r=R('info',`Saline bolus running (${p.fluids} L total).`);break;
+    }
+    if(h)r=h(p,r)||r;
+  }
+  if(a.item&&!r.x&&!ITEMS[a.item].reuse)useUp(a.item);
+  if(r.t==='good'&&!r.x&&!p.credit[id]){p.credit[id]=1;addScore(15);}
+  if(r.t==='bad'&&!r.x)addScore(-10);
+  return r;
+}
+function doAct(p,id){
+  const r=perform(p,id);
+  p.log.push({t:r.t,m:`[${fmt(p.t)}] ${r.m}`});
+  toast(r.m,r.t);
+  if(panelP===p)refreshPanel();
+}
+
+/* ================= PANEL ================= */
+function openPanel(p){
+  panelOpen='patient';panelP=p;
+  $('panel').classList.remove('hidden');$('station').classList.add('hidden');
+  document.exitPointerLock();
+  $('pTitle').textContent=`Bay ${p.bay+1} — ${p.name}, ${p.age}${p.sex}`;
+  $('pSub').textContent='Time keeps running. Close with E.';
+  $('pHand').innerHTML='<b>EMS handover:</b> '+CASES[p.kind].hist(p);
+  refreshPanel(true);
+}
+function refreshPanel(){
+  const p=panelP;if(!p)return;
+  const t=vitText(p);
+  $('pVit').innerHTML=p.flags.monitor?`<div class="hr"><small>HR</small><b>${t.hr}</b></div><div class="bp"><small>BP</small><b>${t.bp}</b></div><div class="sp"><small>SpO2</small><b>${t.sp}</b></div><div class="rr"><small>RR</small><b>${t.rr}</b></div>`:'<div style="grid-column:1/-1;color:#8fa4b8;font-size:12px;text-align:center">Monitor not attached. Attach it to see vitals.</div>';
+  const lg=$('pLog');lg.innerHTML=p.log.map(l=>`<div class="${l.t}">${l.m}</div>`).join('')||'<div>No findings yet. Start with the ABCDE assessment.</div>';lg.scrollTop=lg.scrollHeight;
+  let h='';
+  GROUPS.forEach(g=>{h+=`<div class="grp">${g}</div><div class="acts">`;
+    Object.keys(ACT).filter(k=>ACT[k].g===g).forEach(k=>{const a=ACT[k];let sub='';let lack=false;
+      if(a.item){if(invCount(a.item))sub=`using ${ITEMS[a.item].name} ×${ITEMS[a.item].reuse?'':invCount(a.item)}`;else{lack=true;sub='need '+ITEMS[a.item].name;}}
+      else if(k==='cpr'&&p.flags.cpr)sub='RUNNING';
+      if(a.needIV&&!p.flags.iv&&!lack){lack=true;sub='needs IV access';}
+      h+=`<button class="act ${lack?'lack':''}" data-id="${k}">${a.l}${sub?`<em>${sub}</em>`:''}</button>`;});
+    h+='</div>';});
+  $('pActs').innerHTML=h;
+}
+$('pActs').addEventListener('click',e=>{const b=e.target.closest('.act');if(b&&panelP)doAct(panelP,b.dataset.id);});
+function openStation(id){
+  panelOpen='station';const S=STATIONS[id];
+  $('station').classList.remove('hidden');$('panel').classList.add('hidden');document.exitPointerLock();
+  $('sTitle').textContent=S.name;
+  $('sItems').innerHTML=S.items.map(k=>`<div class="sitem"><span class="ic">${ITEMS[k].icon}</span><div>${ITEMS[k].name}<br><small>${ITEMS[k].reuse?'reusable':'stack of '+ITEMS[k].qty}</small></div><button class="act" data-k="${k}" style="width:90px;text-align:center">Take</button></div>`).join('');
+}
+$('sItems').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b)giveItem(b.dataset.k);});
+function closePanel(){
+  if(!panelOpen)return;panelOpen=null;panelP=null;
+  $('panel').classList.add('hidden');$('station').classList.add('hidden');
+  try{canvas.requestPointerLock();}catch(e){}
+  setTimeout(()=>{if(!locked&&running&&!over&&!panelOpen)$('pause').classList.remove('hidden');},250);
+}
+$('pClose').onclick=closePanel;$('sClose').onclick=closePanel;
+
+/* ================= PLAYER ================= */
+const player=B.MeshBuilder.CreateBox('player',{size:1},scene);
+player.isVisible=false;player.isPickable=false;player.checkCollisions=true;
+player.ellipsoid=new B.Vector3(.35,.85,.35);player.position.set(0,.86,-9.5);
+function movePlayer(dt){
+  let mx=0,mz=0;
+  if(!panelOpen&&locked){if(keys.KeyW)mz++;if(keys.KeyS)mz--;if(keys.KeyD)mx++;if(keys.KeyA)mx--;}
+  const len=Math.hypot(mx,mz)||1,sp=(keys.ShiftLeft||keys.ShiftRight)?7:4.4,s=Math.sin(yaw),c=Math.cos(yaw);
+  const vx=(mz*s+mx*c)/len*sp*((mx||mz)?1:0),vz=(mz*c-mx*s)/len*sp*((mx||mz)?1:0);
+  vy-=22*dt;if(onGround&&keys.Space&&locked&&!panelOpen){vy=6.2;onGround=false;}
+  const y0=player.position.y;
+  player.moveWithCollisions(new B.Vector3(vx*dt,vy*dt,vz*dt));
+  const dy=player.position.y-y0;
+  if(vy<0&&dy>vy*dt+1e-5){onGround=true;vy=0;}else{onGround=false;if(vy>0&&dy<vy*dt-1e-5)vy=0;}
+  if(player.position.y<-5){player.position.set(0,.86,-9.5);vy=0;}
+  cam.position.set(player.position.x,player.position.y+.8,player.position.z);
+  cam.rotation.set(pitch,yaw,0);
+}
+document.addEventListener('mousemove',e=>{if(!locked)return;yaw+=e.movementX*.0022;pitch=clamp(pitch+e.movementY*.0022,-1.5,1.5);});
+document.addEventListener('pointerlockchange',()=>{
+  locked=document.pointerLockElement===canvas;
+  if(!locked&&running&&!over&&!panelOpen)$('pause').classList.remove('hidden');
+  if(locked)$('pause').classList.add('hidden');
+});
+$('resume').onclick=()=>canvas.requestPointerLock();
+$('pause').addEventListener('click',()=>canvas.requestPointerLock());
+
+/* ---------- focus ---------- */
+let focus=null,focusKey='',fT=0;
+function updateFocus(dt){
+  fT-=dt;if(fT>0)return;fT=.08;
+  focus=null;
+  if(!panelOpen&&locked){
+    const h=scene.pickWithRay(cam.getForwardRay(4.5),m=>m.isPickable&&m!==player);
+    if(h&&h.hit&&h.pickedMesh){const md=h.pickedMesh.metadata;
+      if(md&&h.distance<3.6){if(md.type==='station')focus=md;else if(md.type==='patient'&&BAYS[md.bay].p)focus=md;}}
+    if(!focus){for(const b of BAYS){if(b.p&&Math.hypot(b.cx-player.position.x,10.5-player.position.z)<2.6){focus={type:'patient',bay:b.i};break;}}}
+  }
+  const pr=$('prompt');let key='',txt='';
+  if(focus){
+    if(focus.type==='patient'){const p=BAYS[focus.bay].p;key='p'+p.id+sel+(inv[sel]?inv[sel].id:'');txt=`[E] Examine Bay ${focus.bay+1}: ${p.chief}`+(inv[sel]?`   [Click] use ${ITEMS[inv[sel].id].name}`:'');}
+    else{key='s'+focus.id;txt=`[E] Open ${STATIONS[focus.id].name}`;}
+  }
+  if(key!==focusKey){focusKey=key;pr.textContent=txt;pr.classList.toggle('hidden',!txt);}
+}
+function interact(){
+  if(panelOpen){closePanel();return;}
+  if(!focus)return;
+  if(focus.type==='patient'){const p=BAYS[focus.bay].p;if(p)openPanel(p);}else openStation(focus.id);
+}
+function clickUse(){
+  if(!focus)return;
+  if(focus.type==='station'){openStation(focus.id);return;}
+  const p=BAYS[focus.bay].p;if(!p)return;
+  const s=inv[sel];
+  if(!s){openPanel(p);return;}
+  const acts=ITEMS[s.id].acts;
+  if(acts.length>1)openPanel(p);else doAct(p,acts[0]);
+}
+canvas.addEventListener('mousedown',e=>{if(!running||over)return;if(!locked){if(!panelOpen)canvas.requestPointerLock();return;}if(e.button===0)clickUse();});
+canvas.addEventListener('wheel',e=>{if(!running)return;sel=(sel+(e.deltaY>0?1:8))%9;renderHotbar();},{passive:true});
+window.addEventListener('keydown',e=>{
+  if(!running||over)return;
+  keys[e.code]=true;
+  if(e.code==='Space'||e.code==='Tab')e.preventDefault();
+  if(e.code==='KeyE'){interact();}
+  else if(e.code==='Escape'&&panelOpen){closePanel();}
+  else if(e.code==='KeyQ'&&!panelOpen)dropSel();
+  else if(e.code==='KeyM'){muted=!muted;toast(muted?'Sound muted':'Sound on','info');}
+  else if(/^Digit[1-9]$/.test(e.code)&&!panelOpen){sel=+e.code.slice(5)-1;renderHotbar();}
+});
+window.addEventListener('keyup',e=>{keys[e.code]=false;});
+window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
+
+/* ================= MAIN LOOP ================= */
+let listT=0,ambT=0,ambOn=false;
+function pickKind(){
+  if(seq.length)return seq.shift();
+  const pool=WEIGHTS.filter(w=>w[0]!==lastKind);let tot=pool.reduce((a,b)=>a+b[1],0),r=Math.random()*tot;
+  for(const w of pool){r-=w[1];if(r<=0)return w[0];}return pool[0][0];
+}
+scene.onBeforeRenderObservable.add(()=>{
+  const dt=Math.min(.05,engine.getDeltaTime()/1000);
+  if(!running||over)return;
+  if(!locked&&!panelOpen){return;}
+  gameT+=dt;
+  movePlayer(dt);updateFocus(dt);
+  nextSpawn-=dt;
+  if(nextSpawn<=0){const k=pickKind();if(BAYS.some(b=>!b.p)){if(spawn(k)){lastKind=k;nextSpawn=Math.max(28,62-saved*3)+rnd(-8,8);}else seq.unshift(k);}else{seq.unshift(k);nextSpawn=8;}}
+  BAYS.forEach(b=>{
+    const p=b.p;
+    if(p){updatePatient(p,dt);}
+    const q=b.p;
+    if(q&&q.flags.monitor&&!q.dead)feedTrace(q,dt);
+    b.mdraw-=dt;if(b.mdraw<=0){b.mdraw=.08;drawMonitor(b);}
+    b.tagT-=dt;if(b.tagT<=0){b.tagT=.8;drawTag(b);}
+    if(q&&q.model){animatePatient(q,dt);}
+  });
+  listT-=dt;if(listT<=0){listT=.5;renderList();if(panelP)refreshVitalsOnly();}
+  ambT-=dt;if(ambT<=0){ambT=.35;ambOn=!ambOn;lampR.emissiveColor=C3(ambOn?'#ff2020':'#300000');lampB.emissiveColor=C3(ambOn?'#101840':'#2050ff');}
+  npcs.forEach((n,i)=>{n.P.head.rotation.y=Math.sin(gameT*.6+i*2)*.5;});
+});
+function refreshVitalsOnly(){
+  const p=panelP,t=vitText(p);
+  if(p.flags.monitor)$('pVit').innerHTML=`<div class="hr"><small>HR</small><b>${t.hr}</b></div><div class="bp"><small>BP</small><b>${t.bp}</b></div><div class="sp"><small>SpO2</small><b>${t.sp}</b></div><div class="rr"><small>RR</small><b>${t.rr}</b></div>`;
+}
+function animatePatient(p,dt){
+  const P=p.model.P,v=p.v;
+  let k=0;
+  if(p.flags.cpr)k=-.22*Math.max(0,Math.sin(gameT*11.5));
+  else if(p.flags.bvm)k=.1*Math.max(0,Math.sin(gameT*1.3*3));
+  else if(!p.dead&&v.rr>1){p.br+=dt*v.rr/60*6.283;k=.07*Math.sin(p.br);}
+  P.torso.scaling.z=1+k*2;
+  // skin tint
+  const pulse=hasPulse(p);
+  const cy=pulse?clamp((93-v.spo2)/25,0,1):.65,pale=pulse?clamp((112-v.sbp)/70,0,1):.8;
+  const base=p.skin.clone();
+  let col=B.Color3.Lerp(base,new B.Color3(.45,.6,.72),cy*.7);col=B.Color3.Lerp(col,new B.Color3(.9,.88,.85),pale*.4);
+  if(p.kind==='anaph')col=B.Color3.Lerp(col,new B.Color3(.92,.38,.35),clamp((100-p.H)/60,0,.6));
+  if(p.dead)col=B.Color3.Lerp(col,new B.Color3(.72,.72,.74),.8);
+  ['head','handL','handR'].forEach(n=>P[n].material.diffuseColor=col);
+  if(p.bloodMesh){const s=clamp(.2+p.blood*.06,.2,2.6);p.bloodMesh.scaling.x=s;p.bloodMesh.scaling.z=s;}
+}
+function renderList(){
+  let h='';
+  BAYS.forEach(b=>{const p=b.p;
+    if(!p){h+=`<div class="pl empty">Bay ${b.i+1}: empty</div>`;return;}
+    const mon=p.flags.monitor;
+    const st=p.dead?'DECEASED':p.saved?'STABLE, to ICU':mon?(p.H>=70?'stable':p.H>=40?'unstable':'CRITICAL'):'unmonitored';
+    const cls=p.dead?'dead':p.saved?'ok':mon?(p.H>=70?'ok':p.H>=40?'warn':'bad'):'';
+    h+=`<div class="pl ${cls}"><b>Bay ${b.i+1}</b> ${p.age}${p.sex}, ${p.chief}<br><span>${st}, ${fmt(p.t)} in department</span></div>`;});
+  $('plist').innerHTML=h;
+}
+
+/* ================= FLOW ================= */
+function resetGame(){
+  BAYS.forEach(b=>{if(b.p)removePatient(b.p);});
+  score=0;saved=0;deaths=0;nextSpawn=6;seq=['hypo','anaph'];lastKind='';gameT=0;
+  inv.fill(null);sel=0;renderHotbar();
+  $('score').textContent=0;$('saved').textContent=0;$('lives').textContent='♥♥♥';$('best').textContent=best;$('chat').innerHTML='';
+  player.position.set(0,.86,-9.5);yaw=0;pitch=0;vy=0;
+}
+function endGame(){
+  over=true;document.exitPointerLock();
+  if(score>best){best=score;try{localStorage.setItem('ersim_best',best);}catch(e){}}
+  $('overTxt').innerHTML=`Three patients were lost.<br>Final score: <b>${score}</b><br>Patients stabilised: <b>${saved}</b><br>Best score: <b>${best}</b>`;
+  $('over').classList.remove('hidden');$('panel').classList.add('hidden');$('station').classList.add('hidden');panelOpen=null;panelP=null;
+}
+$('go').onclick=()=>{
+  try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  $('start').classList.add('hidden');resetGame();running=true;
+  canvas.requestPointerLock();
+  chat('Shift started. The first ambulance is on its way.','info');
+};
+$('again').onclick=()=>{$('over').classList.add('hidden');over=false;resetGame();running=true;canvas.requestPointerLock();};
+$('best').textContent=best;renderHotbar();renderList();
+engine.runRenderLoop(()=>scene.render());
+window.addEventListener('resize',()=>engine.resize());
+})();
+</script>
+</body>
+</html>
