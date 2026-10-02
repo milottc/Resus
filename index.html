@@ -70,6 +70,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);font-family
 .act.e1{border-color:#ff5a5f}.act.e2{border-color:#ff9a3d}.act.e3{border-color:#ffd84b}.act.e4{border-color:#6fe38f}.act.e5{border-color:#6fb7ff}
 .sitem{display:flex;align-items:center;gap:10px;border:2px solid var(--line);padding:8px;margin-bottom:6px;background:rgba(255,255,255,.03)}
 .sitem .ic{font-size:26px}.sitem div{flex:1;font-size:13px}.sitem small{color:var(--dim)}
+.dbtn{background:#223243;color:var(--txt);opacity:.6;margin-right:8px;min-width:120px}
+.dbtn small{display:block;font-weight:400;font-size:11px}
+.dbtn.on{opacity:1;background:var(--acc);color:#04201c;outline:3px solid #fff}
 table.ub{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}table.ub td{border:1px solid var(--line);padding:5px 8px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/babylonjs@6.49.0/babylon.js"></script>
@@ -112,9 +115,24 @@ table.ub{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}t
     <li><b>Kit:</b> Supply Room (east of the lobby), Crash Cart (corridor). Hotbar holds 9 stacks.</li>
   </ul>
   <p style="color:#8fa4b8;font-size:12px">Educational game with simplified physiology. Not a clinical training tool. Needs a desktop browser with keyboard and mouse. Clock runs 1 s = 1 minute for waits; critical patients are time-compressed.</p>
+  <div style="margin-top:10px;font-size:12px;color:#8fa4b8">Difficulty</div>
+  <div id="diffRow">
+    <button class="btn dbtn" data-d="peaceful">Peaceful<small>no hearts lost</small></button>
+    <button class="btn dbtn" data-d="easy">Easy<small>average ER night</small></button>
+    <button class="btn dbtn on" data-d="medium">Medium<small>busy, one crash surge</small></button>
+    <button class="btn dbtn" data-d="hard">Hard<small>constant MCI</small></button>
+  </div>
+  <p id="diffDesc" style="font-size:12px"></p>
   <button class="btn" id="go">Start shift</button>
 </div></div>
-<div id="over" class="overlay hidden"><div class="box"><h1>Shift over</h1><p id="overTxt"></p><button class="btn" id="again">Start a new shift</button></div></div>
+<div id="over" class="overlay hidden"><div class="box"><h1>Shift over</h1><p id="overTxt"></p><div style="margin-top:10px;font-size:12px;color:#8fa4b8">Difficulty for next shift</div>
+  <div>
+    <button class="btn dbtn" data-d="peaceful">Peaceful</button>
+    <button class="btn dbtn" data-d="easy">Easy</button>
+    <button class="btn dbtn" data-d="medium">Medium</button>
+    <button class="btn dbtn" data-d="hard">Hard</button>
+  </div>
+  <button class="btn" id="again">Start a new shift</button></div></div>
 
 <script>
 (function(){
@@ -721,7 +739,7 @@ let running=false,over=false,locked=false,panelOpen=null,panelP=null,boardOpen=f
 let score=0,saved=0,deaths=0,muted=false,nextEMS=5,nextWalk=12,nextExt=40,divertUntil=0,surge1=false,surge2=false;
 const cool={},stats={lwbs:0,board:0,triN:0,triOK:0,ramp:0,died:0};
 let ramp=[],seqE=['anaph'],seqW=['flu','ankle','appy'];
-let best=0;try{best=+localStorage.getItem('ersim2_best')||0;}catch(e){}
+let diffKey='medium',best=0;try{best=+localStorage.getItem('ersim2_best_'+diffKey)||0;}catch(e){}
 const inv=new Array(9).fill(null);let sel=0;
 const keys={};let yaw=0,pitch=0,vy=0,onGround=false,AC=null,grab=null,focus=null;
 
@@ -993,8 +1011,8 @@ function doAct(p,id){
 
 /* ================= patient simulation ================= */
 function die(p){
-  p.dead=true;p.exitT=8;deaths++;stats.died++;addScore(-150);
-  $('lives').textContent='♥'.repeat(Math.max(0,3-deaths))+'♡'.repeat(Math.min(3,deaths));
+  p.dead=true;p.exitT=8;if(!DIFF.peaceful)deaths++;stats.died++;addScore(-150);
+  if(!DIFF.peaceful)$('lives').textContent='♥'.repeat(Math.max(0,3-deaths))+'♡'.repeat(Math.min(3,deaths));
   p.flags.cpr=false;p.flags.bvm=false;
   if(p.st){const s=B.MeshBuilder.CreateBox('sheet',{width:.85,height:.06,depth:1.85},scene);s.parent=p.st.vis;s.position.set(0,1.1,0);const m=new B.StandardMaterial('shm',scene);m.diffuseColor=C3('#f2f2f2');s.material=m;s.isPickable=false;p.sheet=s;}
   else if(p.model)p.model.node.rotation.x=.9;
@@ -1019,7 +1037,7 @@ function updatePatient(p,dt){
   if(p.flags.vent&&p.st&&p.st.dock&&p.st.dock.vt>=650){p.H-=.2*dt;if(!p.vtWarn){p.vtWarn=1;chat(`${locName(p)}: tidal volume too high, lung injury risk. Lower Vt.`,'warn');}}
   if(p.flags.vent&&!p.vtWarn2&&!mvOK(p)){p.vtWarn2=1;chat(`${locName(p)}: ventilator minute volume is off target. Check rate and Vt.`,'warn');}
   if(p.loc==='chair'&&!p.seen&&p.t>C.patience){stats.lwbs++;addScore(-25);chat(`${p.name} left without being seen after ${fmtWait(p.t)}. -25`,'bad');removePatient(p);return;}
-  if(!p.ready)p.H=Math.min(100,p.H-C.drain(p)*dt);else p.H=Math.min(100,p.H+dt*.5);
+  if(!p.ready){const dr=C.drain(p);p.H=Math.min(100,p.H-(dr>0?dr*DIFF.drain:dr)*dt);}else p.H=Math.min(100,p.H+dt*.5);
   if(p.bleed&&p.bleed!=='tq')p.blood+=dt*(p.bleed==='free'?1:.4);
   if(C.tick)C.tick(p,dt);
   const C2=CASES[p.kind];
@@ -1103,7 +1121,7 @@ function acceptToUnit(st,d){
   chat(`✔ ${p.name} admitted to ${DEST_NAME[d.type]}. +${pts}`,'good');chat('💡 '+CASES[p.kind].tip,'info');
   st.synth=makeSynth(p.name,d.type==='icu'&&p.flags.vent);
   if(p.tag){p.tag.mesh.dispose(false,true);p.tag=null;}
-  if(best<score){best=score;try{localStorage.setItem('ersim2_best',best);}catch(e){}$('best').textContent=best;}
+  if(best<score){best=score;try{localStorage.setItem('ersim2_best_'+diffKey,best);}catch(e){}$('best').textContent=best;}
   if(panelP===p)closePanel();
 }
 function dischargePatient(p){
@@ -1145,19 +1163,37 @@ function lever(k){
     bd.occ.until=Math.min(bd.occ.until,gameT+6);cool[k]=gameT+90;addScore(-5);chat(`Bed manager is expediting discharge from ${bd.name}.`,'info');}
   if(boardOpen)openBoard();
 }
+const DIFFS={
+  peaceful:{name:'Peaceful',peaceful:true,emsBase:110,emsMin:75,walkBase:65,walkMin:42,mciFirst:0,mciEvery:0,mciN:0,flu:false,drain:.6,ext:1.5,fillI:1,fillO:1,
+    desc:'Relaxed. Slow arrivals, empty wards, slow deterioration, and you never lose hearts when a patient dies (the shift never ends on its own).'},
+  easy:{name:'Easy',emsBase:100,emsMin:65,walkBase:60,walkMin:38,mciFirst:0,mciEvery:0,mciN:0,flu:false,drain:.75,ext:1.3,fillI:1,fillO:2,
+    desc:'Average ER night. Steady trickle of patients, no mass casualty, slower deterioration, emptier wards.'},
+  medium:{name:'Medium',emsBase:80,emsMin:42,walkBase:46,walkMin:26,mciFirst:240,mciEvery:0,mciN:3,flu:true,drain:1,ext:1,fillI:2,fillO:3,
+    desc:'Busy night. One multi-vehicle crash plus a flu surge.'},
+  hard:{name:'Hard',emsBase:55,emsMin:26,walkBase:36,walkMin:18,mciFirst:90,mciEvery:180,mciN:4,flu:true,drain:1.2,ext:.7,fillI:3,fillO:4,
+    desc:'Mass casualty incident. Waves of critical trauma every 3 minutes, constant ambulances, wards nearly full, faster deterioration.'}
+};
+const MCI_POOL=['hemo','tension','opioid','vf','hemo','stemi','tension'];
+let DIFF=DIFFS.medium,nextMCI=Infinity;
 function spawnLogic(dt){
+  const D=DIFF;
   nextEMS-=dt;
-  if(nextEMS<=0){nextEMS=Math.max(38,80-saved*2-gameT*.04)+rnd(-8,8);
+  if(nextEMS<=0){nextEMS=Math.max(D.emsMin,D.emsBase-saved*2-gameT*.04)+rnd(-8,8);
     if(gameT<divertUntil)chat('An ambulance was diverted to another hospital.','info');else ramp.push({kind:pickFrom(EMS_W,seqE),t:0,warned:false});}
   nextWalk-=dt;
-  if(nextWalk<=0){nextWalk=Math.max(24,46-gameT*.03)+rnd(-6,6);spawnWalk(pickFrom(WALK_W,seqW));}
-  if(!surge1&&gameT>240){surge1=true;chat('⚠ MULTI-VEHICLE CRASH: 3 ambulances inbound!','bad');toast('Mass casualty: 3 ambulances inbound','bad');['hemo','tension','opioid'].forEach(k=>ramp.push({kind:k,t:0,warned:false}));}
-  if(!surge2&&gameT>540){surge2=true;chat('⚠ Flu season surge: waiting room filling up.','bad');['flu','flu','ankle','appy','stemi'].forEach(k=>spawnWalk(k));}
+  if(nextWalk<=0){nextWalk=Math.max(D.walkMin,D.walkBase-gameT*.03)+rnd(-6,6);spawnWalk(pickFrom(WALK_W,seqW));}
+  if(D.mciN&&gameT>=nextMCI){
+    nextMCI=D.mciEvery?gameT+D.mciEvery:Infinity;
+    const n=D.mciN+(gameT>600?1:0);
+    chat('⚠ MASS CASUALTY INCIDENT: '+n+' ambulances inbound!','bad');toast('Mass casualty: '+n+' ambulances inbound','bad');
+    for(let i=0;i<n;i++)ramp.push({kind:pick(MCI_POOL),t:0,warned:false});
+  }
+  if(D.flu&&!surge2&&gameT>540){surge2=true;chat('⚠ Flu season surge: waiting room filling up.','bad');['flu','flu','ankle','appy','stemi'].forEach(k=>spawnWalk(k));}
   for(let i=ramp.length-1;i>=0;i--){const r=ramp[i];r.t+=dt;const dock=freeDock('ems');
     if(dock){ramp.splice(i,1);spawnEMS(r.kind,dock);}
     else if(!r.warned&&r.t>40){r.warned=true;stats.ramp++;addScore(-25);chat('🚑 Ambulance ramping: offload delayed with no free space. -25','bad');}}
   nextExt-=dt;
-  if(nextExt<=0){nextExt=Math.max(26,55-gameT*.04)+rnd(-8,8);
+  if(nextExt<=0){nextExt=(Math.max(26,55-gameT*.04)+rnd(-8,8))*D.ext;
     const fr=DOCKS.filter(d=>(d.type==='icu'||d.type==='obs')&&!d.occ);
     if(fr.length){const d=pick(fr);fillExt(d,d.type==='icu'?rnd(200,400):rnd(150,300));}}
 }
@@ -1491,26 +1527,32 @@ function resetGame(){
   Object.values(STR).forEach(st=>removeStretcher(st));
   DOCKS.forEach(d=>{d.occ=null;d.fio2=40;d.vt=450;d.vr=14;d.peep=5;d.mute=0;d.page=0;});CHAIRS.forEach(c=>{c.occ=null;});
   grab=null;ramp=[];seqE=['anaph'];seqW=['flu','ankle','appy'];
-  score=0;saved=0;deaths=0;gameT=0;nextEMS=5;nextWalk=12;nextExt=40;divertUntil=0;surge1=false;surge2=false;
+  score=0;saved=0;deaths=0;gameT=0;nextEMS=5;nextWalk=12;nextExt=40;divertUntil=0;surge1=false;surge2=false;nextMCI=DIFF.mciN?DIFF.mciFirst:Infinity;
   for(const k in cool)delete cool[k];stats.lwbs=0;stats.board=0;stats.triN=0;stats.triOK=0;stats.ramp=0;stats.died=0;
   inv.fill(null);sel=0;renderHotbar();
-  $('score').textContent=0;$('saved').textContent=0;$('lives').textContent='♥♥♥';$('best').textContent=best;$('chat').innerHTML='';
+  $('score').textContent=0;$('saved').textContent=0;$('lives').textContent=DIFF.peaceful?'♥ ∞':'♥♥♥';$('best').textContent=best;$('chat').innerHTML='';
   player.position.set(0,.86,-11);yaw=0;pitch=0;vy=0;
   // existing inpatients already fill much of the hospital
-  DOCKS.filter(d=>d.type==='icu').filter((d,i)=>i%5<2).forEach(d=>fillExt(d,rnd(160,380)));
-  DOCKS.filter(d=>d.type==='obs').filter((d,i)=>i%5<3).forEach(d=>fillExt(d,rnd(140,320)));
+  DOCKS.filter(d=>d.type==='icu').filter((d,i)=>i%5<DIFF.fillI).forEach(d=>fillExt(d,rnd(160,380)));
+  DOCKS.filter(d=>d.type==='obs').filter((d,i)=>i%5<DIFF.fillO).forEach(d=>fillExt(d,rnd(140,320)));
 }
 function endGame(){
   over=true;document.exitPointerLock();
-  if(score>best){best=score;try{localStorage.setItem('ersim2_best',best);}catch(e){}}
+  if(score>best){best=score;try{localStorage.setItem('ersim2_best_'+diffKey,best);}catch(e){}}
   const acc=stats.triN?Math.round(100*stats.triOK/stats.triN):0,hrs=(stats.board/60).toFixed(1);
-  $('overTxt').innerHTML=`Three patients were lost.<br>Final score: <b>${score}</b> · Best: <b>${best}</b><br>Patients dispositioned (admitted or discharged): <b>${saved}</b><br>Deaths: <b>${stats.died}</b> · Left without being seen: <b>${stats.lwbs}</b><br>Triage accuracy: <b>${acc}%</b> (${stats.triOK}/${stats.triN})<br>Ambulance ramping events: <b>${stats.ramp}</b><br>Total boarding time in the ED (admitted patients waiting for inpatient beds): <b>${hrs} patient-hours</b><br><br>Boarding and full inpatient units are the real-world driver of ED crowding: every blocked bay delays the next emergency.`;
+  $('overTxt').innerHTML=`Three patients were lost. (${DIFF.name})<br>Final score: <b>${score}</b> · Best: <b>${best}</b><br>Patients dispositioned (admitted or discharged): <b>${saved}</b><br>Deaths: <b>${stats.died}</b> · Left without being seen: <b>${stats.lwbs}</b><br>Triage accuracy: <b>${acc}%</b> (${stats.triOK}/${stats.triN})<br>Ambulance ramping events: <b>${stats.ramp}</b><br>Total boarding time in the ED (admitted patients waiting for inpatient beds): <b>${hrs} patient-hours</b><br><br>Boarding and full inpatient units are the real-world driver of ED crowding: every blocked bay delays the next emergency.`;
   $('over').classList.remove('hidden');$('panel').classList.add('hidden');$('station').classList.add('hidden');panelOpen=null;panelP=null;
 }
+function setDiff(k){diffKey=k;DIFF=DIFFS[k];
+  document.querySelectorAll('.dbtn').forEach(b=>b.classList.toggle('on',b.dataset.d===k));
+  $('diffDesc').textContent=DIFF.desc;
+  try{best=+localStorage.getItem('ersim2_best_'+k)||0;}catch(e){best=0;}$('best').textContent=best;}
+document.querySelectorAll('.dbtn').forEach(b=>b.onclick=()=>setDiff(b.dataset.d));
+setDiff('medium');
 $('go').onclick=()=>{
   try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}
   $('start').classList.add('hidden');resetGame();running=true;canvas.requestPointerLock();
-  chat('Shift started. 19:00. The first ambulance is on its way.','info');
+  chat('Shift started ('+DIFF.name+'). 19:00. The first ambulance is on its way.','info');
 };
 $('again').onclick=()=>{$('over').classList.add('hidden');over=false;resetGame();running=true;canvas.requestPointerLock();};
 $('best').textContent=best;renderHotbar();renderList();renderCap();
